@@ -6,25 +6,42 @@ import glob
 import argparse
 
 
-def txtToBedFile(file, args):
+def txt_to_bed_file(file, args):
     # open txt files in excess of 24GB using a buffer size of 2GB
     with open(file, 'r', buffering=int(2.1e9)) as tab_file:
         reader = csv.DictReader(tab_file, delimiter='\t')
 
         # design output file name based off the input file (subsitute .txt for .bed)
-        # output_name = f"{tab_file.name.split('.')[0]}.bed"
         output_name = tab_file.name.replace('.txt', '.bed')
 
-        # if the output file does not already exist proceed
-        if not os.path.exists(output_name):
-            writeBedFile(output_name, reader, args)
+        # print(output_name)
+
+        while batch := get_batch(reader, 3):
+            # print(batch, end='\n')
+
+            # if the output file exists delete it and proceed
+            try:
+                os.remove(output_name)
+            except OSError:
+                pass
+            
+            # call the write bed function
+            write_bed_file(output_name, batch, args)
+
+        # # if the output file does not already exist proceed
+        # if not os.path.exists(output_name):
+        #     write_bed_file(output_name, reader, args)
 
 
-def writeBedFile(output_name, reader, args):
+def get_batch(reader, batch_size):
+    return [row for _ in range(batch_size) if (row:=next(reader, None))]
+
+
+def write_bed_file(output_name, batch, args):
     # open output file in append mode
     with open(output_name, 'a') as output_file:
         # set the names of the fields to be written to the new file
-        field_names = ['chr', 'start', 'end', 'strand']
+        field_names = ['chr', 'start', 'end', 'strand', 'coverage1', 'freqC1', 'coverage2', 'freqC2', 'coverage3', 'freqC3']
 
         # create line writer
         writer = csv.DictWriter(output_file, fieldnames=field_names, delimiter='\t')
@@ -74,7 +91,7 @@ def main():
 
     # glob all files in the current directory following the specified pattern: example '*_CHH.txt'
     for file in glob.glob(args.pattern):
-        txtToBedFile(file, args)
+        txt_to_bed_file(file, args)
 
 
 if __name__ == "__main__":
