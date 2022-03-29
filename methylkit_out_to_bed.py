@@ -18,8 +18,6 @@ def txt_to_bed_file(file, args):
         # design output file name based off the input file (subsitute .txt for .bed)
         output_name = tab_file.name.replace('.txt', '.bed')
 
-        # print(output_name)
-
         # if the output file exists delete it and proceed
         try:
             os.remove(output_name)
@@ -30,44 +28,14 @@ def txt_to_bed_file(file, args):
         # assigns the results of get_batch to 'batch' as long as there are lines left to read
         while batch := get_batch(reader, file):
             # keep at least nine lines in tile
-            # if batch != None:
-            working_batch.extend(batch)     
+            working_batch.extend(batch)
+               
             # call the write bed function
             write_bed_file(output_name, working_batch, args)
-            
-            # print(working_batch)
 
 
 def get_batch(reader, file):
     return [row for _ in range(9) if (row:=next(reader, None))]
-
-    # # open txt files in excess of 24GB using a buffer size of 2GB
-    # with open(file, 'r', buffering=int(2.1e9)) as tab_file:
-    #     sweep = csv.DictReader(tab_file, delimiter='\t')
-
-    #     global file_line
-
-    #     for _ in range(file_line):
-    #         next(sweep, None)
-
-    #     # produce the base position within the next 3 lines
-    #     base = [int(row.get('base')) for _ in range(3) if (row:=next(sweep, None))]
-
-    #     # print(base)
-
-    #     # test if the genomic ranges spands 1/2/3 bases and return the appropriate lines
-    #     if base[0] + 1 != base[1]:
-    #         file_line += 1
-    #         next(reader, None)
-    #         return get_batch(reader, file)  # employ recurrsion to pass genomic ranges of 1
-    #     elif base[0] + 1 == base[1] and base[1] + 1 == base[2]:
-    #         file_line += 3
-    #         # return [row for _ in range(3) if (row:=next(reader, None))]
-    #         return [row.get('base') for _ in range(3) if (row:=next(reader, None))]
-    #     elif base[0] + 1 == base[1] and base[1] + 1 != base[2]:
-    #         file_line += 2
-    #         # return [row for _ in range(2) if (row:=next(reader, None))]
-    #         return [row.get('base') for _ in range(2) if (row:=next(reader, None))]
 
 
 def write_bed_file(output_name, working_batch, args):
@@ -84,7 +52,6 @@ def write_bed_file(output_name, working_batch, args):
             writer.writeheader()
 
         position = [int(row.get('base')) for row in working_batch]
-        # print(position)
 
         while len(working_batch) >= 3:  # this ma cuase the last location to be sckipped if it consists of a range of 2
             lines = []
@@ -100,8 +67,6 @@ def write_bed_file(output_name, working_batch, args):
                 for _ in range(2):
                     lines.append(working_batch.pop(0))
                     position.pop(0)
-
-            print(lines)
             
             if lines:
                 line = transform_line(lines)
@@ -113,7 +78,6 @@ def write_bed_file(output_name, working_batch, args):
 def transform_line(lines):
     # take the first line to create our transformed line
     line = lines[0]
-    # print(f"untransformed line {line}")
     length = len(lines)
 
     # a list of columns from the input file to be removed
@@ -143,6 +107,9 @@ def transform_line(lines):
     if length == 3:
         line['coverage3'] = lines[length-1].pop('coverage')
         line['freqC3'] = lines[length-1].pop('freqC')
+    else:
+        line['coverage3'] = 0
+        line['freqC3'] = 0
 
     return line
 
