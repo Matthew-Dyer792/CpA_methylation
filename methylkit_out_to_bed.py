@@ -1,9 +1,13 @@
 # file stream script to analyze CpA methylation
 from asyncore import read
+from copy import deepcopy
 import csv
 import os
 import glob
 import argparse
+
+
+file_line = 0
 
 
 def txt_to_bed_file(file, args):
@@ -16,25 +20,48 @@ def txt_to_bed_file(file, args):
 
         # print(output_name)
 
-        while batch := get_batch(reader, 3):
-            # print(batch, end='\n')
+        # if the output file exists delete it and proceed
+        try:
+            os.remove(output_name)
+        except OSError:
+            pass
 
-            # if the output file exists delete it and proceed
-            try:
-                os.remove(output_name)
-            except OSError:
-                pass
-            
+        # assigns the results of get_batch to 'batch' as long as there are lines left to read
+        while batch := get_batch(reader, file):         
             # call the write bed function
-            write_bed_file(output_name, batch, args)
-
-        # # if the output file does not already exist proceed
-        # if not os.path.exists(output_name):
-        #     write_bed_file(output_name, reader, args)
+            # write_bed_file(output_name, batch, args)
+            print(batch)
+            # pass
 
 
-def get_batch(reader, batch_size):
-    return [row for _ in range(batch_size) if (row:=next(reader, None))]
+def get_batch(reader, file):
+    # open txt files in excess of 24GB using a buffer size of 2GB
+    with open(file, 'r', buffering=int(2.1e9)) as tab_file:
+        sweep = csv.DictReader(tab_file, delimiter='\t')
+
+        global file_line
+
+        for _ in range(file_line):
+            next(sweep, None)
+
+        # produce the base position within the next 3 lines
+        base = [int(row.get('base')) for _ in range(3) if (row:=next(sweep, None))]
+
+        # print(base)
+
+        # test if the genomic ranges spands 1/2/3 bases and return the appropriate lines
+        if base[0] + 1 != base[1]:
+            file_line += 1
+            next(reader, None)
+            return get_batch(reader, file)  # employ recurrsion to pass genomic ranges of 1
+        elif base[0] + 1 == base[1] and base[1] + 1 == base[2]:
+            file_line += 3
+            # return [row for _ in range(3) if (row:=next(reader, None))]
+            return [row.get('base') for _ in range(3) if (row:=next(reader, None))]
+        elif base[0] + 1 == base[1] and base[1] + 1 != base[2]:
+            file_line += 2
+            # return [row for _ in range(2) if (row:=next(reader, None))]
+            return [row.get('base') for _ in range(2) if (row:=next(reader, None))]
 
 
 def write_bed_file(output_name, batch, args):
@@ -50,29 +77,39 @@ def write_bed_file(output_name, batch, args):
         if args.header:
             writer.writeheader()
 
-        # loop through the lines read in
-        for line in reader:
-            # a list of columns from the input file to be removed
-            keys_to_remove = ['chrBase', 'coverage', 'freqC', 'freqT']
+        line = batch[0]
+        length = len(batch)
 
-            # remove undesired columns from read in line
-            for k in keys_to_remove:
-                line.pop(k, None)
+        # a list of columns from the input file to be removed
+        keys_to_remove = ['chrBase', 'freqT']
 
-            # rename column 'base' to 'start'
-            line['start'] = line.pop('base')
+        # remove undesired columns from read in line
+        for k in keys_to_remove:
+            line.pop(k, None)
 
-            # generate the end column by adding 1 to the start column value
-            line['end'] = int(line.get('start')) + 1
+        # rename and merge the dictionary items together into 'line'
+        line['start'] = line.pop('base')  # rename column 'base' to 'start'
+        line['end'] = int(batch[length-1].get('base')) + 1
 
-            # covert the 'F' and 'R' strand notation for '+' and '-'
-            if line.get('strand') == 'F':
-                line['strand'] = '+'
-            else:
-                line['strand'] = '-'
+        # covert the 'F' and 'R' strand notation for '+' and '-'
+        if line.get('strand') == 'F':
+            line['strand'] = '+'
+        else:
+            line['strand'] = '-'
 
-            # write modified line to the output file in append
-            writer.writerow(line)
+        # add all 'coverage' and 'freqC' column information to the one line
+        line['coverage1'] = line.pop('coverage')
+        line['freqC1'] = line.pop('freqC')
+        line['coverage2'] = batch[1].pop('coverage')
+        line['freqC2'] = batch[1].pop('freqC')
+        
+        # if the length of the genomic range is 3 then retain the methylation info
+        if length == 3:
+            line['coverage3'] = batch[length-1].pop('coverage')
+            line['freqC3'] = batch[length-1].pop('freqC')
+
+        # write modified line to the output file in append
+        writer.writerow(line)
 
 
 def main():
