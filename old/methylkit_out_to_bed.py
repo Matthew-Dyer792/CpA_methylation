@@ -30,6 +30,12 @@ def split_file_on_chr(file):
             #         writer.writerow(line)
 
 
+
+
+
+
+
+
 def txt_to_bed_file(file, args):
     # open txt files in excess of 24GB using a buffer size of 2GB
     with open(file, 'r', buffering=int(2.1e9)) as tab_file:
